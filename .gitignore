@@ -1,0 +1,6 @@
+# Venv folders
+.venv/
+
+# Pytest cache and folders
+.pytest_cache/
+__pycache__/
