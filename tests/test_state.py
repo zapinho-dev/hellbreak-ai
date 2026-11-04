@@ -18,7 +18,6 @@ def test_initial_state():
             owner_id=0,
             controller_id=0
         ),
-        health_stack=[True] * 8,
     )
 
     player_1 = PlayerState(
@@ -29,7 +28,6 @@ def test_initial_state():
             owner_id=1,
             controller_id=1
         ),
-        health_stack=[True] * 8,
     )
 
     game = GameState(
@@ -44,7 +42,7 @@ def test_initial_state():
     assert game.round_number == 1
     assert game.winner is None
     assert len(game.players) == 2
-    assert len(game.players[0].health_stack) == 8
+    assert len(game.players[0].health_stack) == 0
 
 
 def test_clone_is_independent():

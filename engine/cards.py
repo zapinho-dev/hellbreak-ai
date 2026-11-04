@@ -36,3 +36,9 @@ class CardDefinition:
     blood_production: int = 0
     malice_production: int = 0
     draw_production: int = 0
+
+    # Aspect icons provided while this card is in the Vault.
+    vault_aspects: dict[Aspect, int] = field(default_factory=dict)
+
+    # Original card ability text.
+    ability_text: str = ""

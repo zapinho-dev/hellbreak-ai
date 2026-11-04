@@ -12,8 +12,11 @@ class ActionType(Enum):
     PASS = auto()
 
     BID = auto()
+    CHOOSE_INITIATIVE = auto()
     FLIP_MONSTER = auto()
     DISCARD = auto()
+
+    RESOLVE_REVEAL = auto()
 
 
 @dataclass(frozen=True)
