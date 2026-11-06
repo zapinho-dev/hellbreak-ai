@@ -113,7 +113,7 @@ def test_keeping_current_side_does_not_flip():
     assert game.state.active_player == 0
 
 
-def test_both_decisions_advance_to_discard():
+def test_both_flip_decisions_skip_discard_when_hands_are_small():
     game = make_monster_flip_game()
 
     choose_flip(game, True)
@@ -122,9 +122,10 @@ def test_both_decisions_advance_to_discard():
     assert game.state.players[1].monster_unleashed is True
     assert game.state.players[0].monster_unleashed is False
 
-    assert game.state.monster_flip_completed == {0, 1}
-    assert game.state.phase == Phase.REFRESH
-    assert game.state.step == GameStep.DISCARD_TO_HAND_LIMIT
+    assert game.state.monster_flip_completed == set()
+    assert game.state.phase == Phase.FEEDING
+    assert game.state.step == GameStep.COLLECT_RESOURCES
+    assert game.state.round_number == 2
 
     game.state.validate()
 

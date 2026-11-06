@@ -1,5 +1,6 @@
 from engine.actions import Action, ActionType
 from engine.cards import CardDefinition, CardType
+from engine.constants import HAND_LIMIT
 from engine.observation import (
     CardObservation,
     GameObservation,
@@ -494,6 +495,27 @@ class Game:
                 )
 
             return actions
+
+        if self.state.step == GameStep.DISCARD_TO_HAND_LIMIT:
+            if player_id != self.state.active_player:
+                return []
+
+            player = next(
+                p for p in self.state.players
+                if p.player_id == player_id
+            )
+
+            if len(player.hand) <= HAND_LIMIT:
+                return []
+
+            return [
+                Action(
+                    action_type=ActionType.DISCARD,
+                    player_id=player_id,
+                    source_id=card.instance_id,
+                )
+                for card in player.hand
+            ]
             
         # Normal turn actions are not implemented yet.
         return []
@@ -546,6 +568,13 @@ class Game:
             self.flip_monster(
                 player_id=action.player_id,
                 should_flip=action.parameters == (True,),
+            )
+            return
+
+        if action.action_type == ActionType.DISCARD:
+            self.discard_card(
+                player_id=action.player_id,
+                card_instance_id=action.source_id,
             )
             return
 
@@ -1190,6 +1219,7 @@ class Game:
         # Advance after both players have made their decisions.
         if self.state.monster_flip_completed == all_player_ids:
             self._transition_to(GameStep.DISCARD_TO_HAND_LIMIT)
+            self._advance_hand_limit()
             return
 
         # Let the other player decide.
@@ -1199,3 +1229,80 @@ class Game:
         )
 
         self.state.active_player = opponent.player_id
+
+
+    def _advance_hand_limit(self) -> None:
+        """Select the next player who must discard, or start a new round."""
+
+        if self.state.step != GameStep.DISCARD_TO_HAND_LIMIT:
+            raise ValueError("Not in hand limit step")
+
+        if self.state.is_terminal:
+            raise ValueError("Cannot discard in a finished game")
+
+        if self.state.pending_damage is not None:
+            raise ValueError("Cannot discard during pending damage")
+
+        # Check players in initiative order.
+        initiative_id = self.state.initiative_player
+
+        ordered_players = sorted(
+            self.state.players,
+            key=lambda player: player.player_id != initiative_id,
+        )
+
+        for player in ordered_players:
+            if len(player.hand) > HAND_LIMIT:
+                self.state.active_player = player.player_id
+                return 
+
+        # Nobody needs to discard: begin the next round.
+        self._transition_to(GameStep.COLLECT_RESOURCES)
+        self.state.active_player = self.state.initiative_player
+
+
+    def discard_card(
+        self,
+        player_id: int,
+        card_instance_id: int,
+    ) -> None:
+        """Discard a card from hand to satisfy the hand limit."""
+
+        if self.state.is_terminal:
+            raise ValueError("Cannot discard in a finished game")
+
+        if self.state.pending_damage is not None:
+            raise ValueError("Cannot discard during pending damage")
+
+        if self.state.step != GameStep.DISCARD_TO_HAND_LIMIT:
+            raise ValueError("Not in hand limit step")
+
+        if player_id != self.state.active_player:
+            raise ValueError("Player is not active")
+
+        player = next(
+            (p for p in self.state.players if p.player_id == player_id),
+            None,
+        )
+
+        if player is None:
+            raise ValueError(f"Invalid player ID: {player_id}")
+
+        if len(player.hand) <= HAND_LIMIT:
+            raise ValueError("Player is already within the hand limit")
+
+        card = next(
+            (c for c in player.hand if c.instance_id == card_instance_id),
+            None,
+        )
+
+        if card is None:
+            raise ValueError("Discard card is not in player's hand")
+
+        # Move the selected card to its owner's Crypt.
+        player.hand.remove(card)
+        card.location_id = None
+        player.crypt.append(card)
+
+        # Continue discarding or start the next round.
+        self._advance_hand_limit()
