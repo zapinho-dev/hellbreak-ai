@@ -1061,3 +1061,30 @@ class Game:
 
         # Give the next action to the opponent.
         self._advance_horror_turn(player_id)
+
+
+    def ready_cards(self) -> None:
+        """Ready all monsters, minions, and assets in play."""
+
+        if self.state.is_terminal:
+            raise ValueError("Cannot ready cards in a finished game")
+
+        if self.state.step != GameStep.READY_CARDS:
+            raise ValueError("Not in Ready Cards step")
+
+        if self.state.pending_damage is not None:
+            raise ValueError("Cannot ready cards during pending damage")
+
+        # Both players ready their cards simultaneously.
+        for player in self.state.players:
+            if player.monster is not None:
+                player.monster.exhausted = False
+
+            for minion in player.minions:
+                minion.exhausted = False
+
+            for asset in player.assets:
+                asset.exhausted = False
+
+        # Continue to the Monster Flip step.
+        self._transition_to(GameStep.MONSTER_FLIP)
