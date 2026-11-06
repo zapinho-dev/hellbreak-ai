@@ -1,7 +1,10 @@
 from engine.actions import Action, ActionType
 from engine.cards import CardDefinition, CardType
 from engine.observation import (
+    CardObservation,
     GameObservation,
+    HandCardObservation,
+    LocationObservation,
     PlayerObservation,
 )
 from engine.rules import calculate_vault_resources, can_play_card
@@ -797,6 +800,19 @@ class Game:
             if p.player_id != player_id
         )
 
+        def observe_card(card: CardInstance) -> CardObservation:
+            """Create an immutable snapshot of a public card."""
+            return CardObservation(
+                instance_id=card.instance_id,
+                card_id=card.card_id,
+                owner_id=card.owner_id,
+                controller_id=card.controller_id,
+                exhausted=card.exhausted,
+                damage=card.damage,
+                location_id=card.location_id,
+            )
+
+        # Buils observations of both players' public information.
         public_players = tuple(
             PlayerObservation(
                 player_id=p.player_id,
@@ -817,8 +833,36 @@ class Game:
                     else None
                 ),
                 monster_unleashed=p.monster_unleashed,
+                minions=tuple(
+                    observe_card(card)
+                    for card in p.minions
+                ),
+                assets=tuple(
+                    observe_card(card)
+                    for card in p.assets
+                ),
             )
             for p in self.state.players
+        )
+
+        # Create immutable snapshots of the public locations.
+        public_locations = tuple(
+            LocationObservation(
+                location_id=index,
+                card_id=location.card_id,
+                controller_id=location.controller_id,
+                malice=tuple(sorted(location.malice.items())),
+            )
+            for index, location in enumerate(self.state.locations)
+        )
+
+        # Include card instance IDs only for the observing player's hand.
+        own_hand_cards = tuple(
+            HandCardObservation(
+                instance_id=card.instance_id,
+                card_id=card.card_id,
+            )
+            for card in player.hand
         )
 
         return GameObservation(
@@ -843,6 +887,8 @@ class Game:
             players=public_players,
             is_terminal=self.state.is_terminal,
             winner=self.state.winner,
+            own_hand_cards=own_hand_cards,
+            locations=public_locations,
         )
 
 
