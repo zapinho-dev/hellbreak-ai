@@ -460,6 +460,41 @@ class Game:
 
             return actions
 
+        if self.state.step == GameStep.MONSTER_FLIP:
+
+            # Players decide in initiative order.
+            if player_id != self.state.active_player:
+                return []
+
+            if player_id in self.state.monster_flip_completed:
+                return []
+
+            player = next(
+                p for p in self.state.players
+                if p.player_id == player_id
+            )
+
+            # Every player can choose to keep the current side.
+            actions = [
+                Action(
+                    action_type=ActionType.FLIP_MONSTER,
+                    player_id=player_id,
+                    parameters=(False,),
+                )
+            ]
+
+            # A player with a monster can choose to flip it.
+            if player.monster is not None:
+                actions.append(
+                    Action(
+                        action_type=ActionType.FLIP_MONSTER,
+                        player_id=player_id,
+                        parameters=(True,),
+                    )
+                )
+
+            return actions
+            
         # Normal turn actions are not implemented yet.
         return []
 
@@ -504,6 +539,13 @@ class Game:
                 card_instance_id=action.source_id,
                 location_id=action.location_id,
                 ready_minion=(action.parameters == (True,)),
+            )
+            return
+
+        if action.action_type == ActionType.FLIP_MONSTER:
+            self.flip_monster(
+                player_id=action.player_id,
+                should_flip=action.parameters == (True,),
             )
             return
 
@@ -557,6 +599,7 @@ class Game:
             self.state.resources_collected.clear()
             self.state.initiative_bids.clear()
             self.state.initiative_bid_winner = None
+            self.state.monster_flip_completed.clear()
 
             # Reset Horror action tracking for the new round.
             self.state.last_horror_pass_player = None
@@ -569,6 +612,13 @@ class Game:
             and next_step == GameStep.PLAYER_ACTION
         ):
             self.state.last_horror_pass_player = None
+
+        if (
+            current_step == GameStep.READY_CARDS
+            and next_step == GameStep.MONSTER_FLIP
+        ):
+            self.state.monster_flip_completed.clear()
+            self.state.active_player = self.state.initiative_player
 
         # Update both the current step and its corresponding phase.
         self.state.step = next_step
@@ -1088,3 +1138,64 @@ class Game:
 
         # Continue to the Monster Flip step.
         self._transition_to(GameStep.MONSTER_FLIP)
+
+
+    def flip_monster(
+        self,
+        player_id: int,
+        should_flip: bool,
+    ) -> None:
+        """Resolve a player's Monster Flip decision."""
+
+        if self.state.is_terminal:
+            raise ValueError("Cannot flip in a finished game")
+
+        if self.state.pending_damage is not None:
+            raise ValueError("Cannot flip during pending damage")
+
+        if self.state.step != GameStep.MONSTER_FLIP:
+            raise ValueError("Not in Monster Flip step")
+
+        if player_id != self.state.active_player:
+            raise ValueError("Player is not active")
+
+        if player_id in self.state.monster_flip_completed:
+            raise ValueError("Player already completed Monster Flip")
+
+        player = next(
+            (p for p in self.state.players if p.player_id == player_id),
+            None,
+        )
+
+        if player is None:
+            raise ValueError(f"Invalid player ID: {player_id}")
+
+        if not isinstance(should_flip, bool):
+            raise ValueError("Monster Flip decision must be boolean")
+
+        if should_flip:
+            if player.monster is None:
+                raise ValueError("Player has no monster to flip")
+
+            # Toggle Lurking and Unleashed.
+            player.monster_unleashed = not player.monster_unleashed
+
+        # Record the decision, even if the monster was not flipped.
+        self.state.monster_flip_completed.add(player_id)
+
+        all_player_ids = {
+            p.player_id for p in self.state.players
+        }
+
+        # Advance after both players have made their decisions.
+        if self.state.monster_flip_completed == all_player_ids:
+            self._transition_to(GameStep.DISCARD_TO_HAND_LIMIT)
+            return
+
+        # Let the other player decide.
+        opponent = next(
+            p for p in self.state.players
+            if p.player_id != player_id
+        )
+
+        self.state.active_player = opponent.player_id

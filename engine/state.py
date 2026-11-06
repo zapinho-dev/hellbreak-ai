@@ -141,6 +141,9 @@ class GameState:
 
     last_horror_pass_player: int | None = None
 
+    # Track players who have completed their Monster Flip decision.
+    monster_flip_completed: set[int] = field(default_factory=set)
+
     def clone(self) -> "GameState":
         return deepcopy(self)
 
@@ -416,6 +419,12 @@ class GameState:
                     raise ValueError(
                         "Location Malice cannot be negative"
                     )
+
+        # Validate Monster Flip decision tracking.
+        if not self.monster_flip_completed.issubset(set(player_ids)):
+            raise ValueError(
+                "Monster Flip contains invalid player IDs"
+            )
 
 
     def get_card(self, instance_id: str) -> CardInstance | None:
