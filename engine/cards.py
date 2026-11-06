@@ -25,7 +25,7 @@ class CardDefinition:
     card_type: CardType
 
     cost: int = 0
-    loyalty: dict[Aspect, int] = field(default_factory=list)
+    loyalty: dict[Aspect, int] = field(default_factory=dict)
 
     combat: int | None = None
     health: int | None = None
