@@ -190,6 +190,12 @@ class GameState:
                             f"Invalid card controller: {card.controller_id}"
                         )
 
+                    # Card damage cannot be negative.
+                    if card.damage < 0:
+                        raise ValueError(
+                            f"Negative card damage: {card.instance_id}"
+                        )
+
             vertical_count = 0
 
             for health_card in player.health_stack:
@@ -212,12 +218,48 @@ class GameState:
                         f"Invalid card controller: {card.controller_id}"
                     )
 
+                if card.damage < 0:
+                    raise ValueError(
+                        f"Negative card damage: {card.instance_id}"
+                    )
+
                 if health_card.vertical:
                     vertical_count += 1
 
             if vertical_count > 1:
                 raise ValueError(
                     "A health stack cannot contain multiple vertical cards"
+                )
+
+        # Cards outside the battlefield must not occupy locations.
+        for player in self.players:
+            non_battlefield_zones = (
+                player.deck,
+                player.hand,
+                player.crypt,
+                player.vault,
+            )
+
+            for zone in non_battlefield_zones:
+                for card in zone:
+                    if card.location_id is not None:
+                        raise ValueError(
+                            f"Card outside battlefield has location: "
+                            f"{card.instance_id}"
+                        )
+
+            for health_card in player.health_stack:
+                if health_card.card.location_id is not None:
+                    raise ValueError(
+                        "Health card cannot occupy a location"
+                    )
+
+            if (
+                player.monster is not None
+                and player.monster.location_id is not None
+            ):
+                raise ValueError(
+                    "Monster cannot have a single location"
                 )
 
         if self.pending_damage is not None:
@@ -240,7 +282,31 @@ class GameState:
                     "A finished game cannot have pending damage"
                 )
 
+        # Validate turn ownership and round number.
+        if self.initiative_player not in player_ids:
+            raise ValueError("Invalid initiative player")
 
+        if self.active_player not in player_ids:
+            raise ValueError("Invalid active player")
+
+        if self.round_number < 1:
+            raise ValueError("Round number must be positive")
+
+        # Validate terminal state consistency.
+        if self.is_terminal:
+            if self.winner not in player_ids:
+                raise ValueError("Terminal game must have a valid winner")
+        elif self.winner is not None:
+            raise ValueError("Non-terminal game cannot have a winner")
+
+        # Validate player resources.
+        for player in self.players:
+            if player.blood < 0:
+                raise ValueError("Blood cannot be negative")
+
+            if player.malice < 0:
+                raise ValueError("Malice cannot be negative")     
+        
         # Verify that the current step belongs to the current phase.
         expected_phase = STEP_PHASE_MAP[self.step]
 
@@ -333,6 +399,22 @@ class GameState:
                 if asset.location_id is not None:
                     raise ValueError(
                         f"Asset cannot occupy a location: {asset.instance_id}"
+                    )
+
+        # Validate Malice counters on locations.
+        for location in self.locations:
+            if not location.card_id:
+                raise ValueError("Location card ID cannot be empty")
+
+            if not set(location.malice).issubset(set(player_ids)):
+                raise ValueError(
+                    "Location Malice contains invalid player IDs"
+                )
+
+            for amount in location.malice.values():
+                if amount < 0:
+                    raise ValueError(
+                        "Location Malice cannot be negative"
                     )
 
 
